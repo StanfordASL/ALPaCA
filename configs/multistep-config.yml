@@ -5,7 +5,7 @@ y_dim: 1
 sigma_eps: 0.05
 
 data_horizon: 50
-num_class_samples: 40
+meta_batch_size: 40
 
 nn_layers: [128,128,128]
 activation: 'tanh'
@@ -13,5 +13,5 @@ activation: 'tanh'
 # step params:
 step_min: -2.5
 step_max: 2.5
-
+x_range: [-5., 5.]
 num_steps: 3

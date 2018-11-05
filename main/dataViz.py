@@ -142,12 +142,12 @@ def sinusoid_plot(freq,phase,amp,x_list,sigma_list,y_list,X_update, Y_update,sam
     if legend_labels:
         plt.legend(legend_labels + ['sampled points'])
     
-def gen_sin_fig(agent, sess, X,Y,freq,phase,amp,upper_x=5,lower_x=-5,point_every=0.1, label=None):
+def gen_sin_fig(agent, X,Y,freq,phase,amp,upper_x=5,lower_x=-5,point_every=0.1, label=None):
     y_list = []
     x_list = []
     s_list = []
     for p in np.arange(lower_x,upper_x,0.1):
-        y, s = agent.test(sess, X, Y, [[[p]]])
+        y, s = agent.test(X, Y, [[[p]]])
         y_list.append(y[0,0,0])
         x_list.append(p)
         if s:
@@ -240,22 +240,27 @@ def multistep_plot(pt_list,x_list,sigma_list,y_list,X_update, Y_update,sampling_
     
     
     #plot true step
-    yr_list = []
-    for x in x_list:
-        for i in range(len(pt_list)):
+    #yr_list = []
+    x = np.reshape(x_list,[1,-1])
+    step_pts = np.reshape(pt_list,[-1,1])
+    y = 2.*np.logical_xor.reduce( x > step_pts, axis=0) - 1.
+    yr_list = y
+    
+#     for x in x_list:
+#         for i in range(len(pt_list)):
 
-            if x<pt_list[0]:
-                yr_list.append(((i)%2)*2-1.0)
-                break
+#             if x<pt_list[0]:
+#                 yr_list.append(((i)%2)*2-1.0)
+#                 break
                 
-            if i==(len(pt_list)-1) and x>pt_list[-1]:
-#                 print('ok')
-                yr_list.append(((i+1)%2)*2-1.0)
-                break
+#             if i==(len(pt_list)-1) and x>pt_list[-1]:
+# #                 print('ok')
+#                 yr_list.append(((i+1)%2)*2-1.0)
+#                 break
                 
-            if x>pt_list[i] and x<pt_list[i+1]:
-                yr_list.append(((i+1)%2)*2-1.0)
-                break
+#             if x>pt_list[i] and x<pt_list[i+1]:
+#                 yr_list.append(((i+1)%2)*2-1.0)
+#                 break
                 
     plt.plot(x_list,yr_list,color='r')
     
@@ -270,12 +275,12 @@ def multistep_plot(pt_list,x_list,sigma_list,y_list,X_update, Y_update,sampling_
         
         
 #do plotting
-def gen_step_fig(agent, sess, X,Y,x_jump,upper_x=5,lower_x=-5,point_every=0.1, label=None):
+def gen_step_fig(agent,X,Y,x_jump,upper_x=5,lower_x=-5,point_every=0.1, label=None):
     y_list = []
     x_list = []
     s_list = []
     for p in np.arange(lower_x,upper_x,0.1):
-        y, s = agent.test(sess, X, Y, [[[p]]])
+        y, s = agent.test(X, Y, [[[p]]])
         y_list.append(y[0,0,0])
         x_list.append(p)
         if s:
@@ -299,12 +304,12 @@ def gen_step_gp_fig(agent, X, Y, x_jump, upper_x=5,lower_x=-5,point_every=0.1, l
         legend_labels = [label, 'True']
     step_plot(x_jump,x_test[0,:,0],s,y,X,Y,legend_labels=legend_labels)
 
-def gen_multistep_fig(agent, sess, X,Y,x_jump,upper_x=5,lower_x=-5,point_every=0.1, label=None):
+def gen_multistep_fig(agent, X,Y,x_jump,upper_x=5,lower_x=-5,point_every=0.1, label=None):
     y_list = []
     x_list = []
     s_list = []
     for p in np.arange(lower_x,upper_x,0.1):
-        y, s = agent.test(sess, X, Y, [[[p]]])
+        y, s = agent.test(X, Y, [[[p]]])
         y_list.append(y[0,0,0])
         x_list.append(p)
         if s:

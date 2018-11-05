@@ -1,23 +1,18 @@
-test_horizon: 20
 lr: 0.001
 x_dim: 1
 y_dim: 1
 sigma_eps: 0.02
 
 data_horizon: 10
-num_class_samples: 10
+test_horizon: 20
+meta_batch_size: 10
 
 nn_layers: [128,128, 32]
 activation: 'tanh'
 
 # sinusoid params:
-sinusoid_phase_min: 0.0
-sinusoid_phase_max: 3.14
-
-sinusoid_freq_min: 0.999
-sinusoid_freq_max: 1.0
-
-sinusoid_amp_min: 0.1
-sinusoid_amp_max: 5.0
-
-sinusoid_noise_var: 0.02
+phase_range: [0, 3.14]
+freq_range: [0.999, 1.0]
+amp_range: [0.1, 5.0]
+x_range: [-5., 5.]
+noise_var: 0.02
