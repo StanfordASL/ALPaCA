@@ -31,6 +31,9 @@ class ALPaCA:
             else:
                 self.SigEps = self.sigma_eps*tf.eye(self.y_dim)
             self.SigEps = tf.reshape(self.SigEps, (1,1,self.y_dim,self.y_dim))
+            
+            # try making it learnable
+            #self.SigEps = tf.get_variable('sigma_eps', initializer=self.SigEps )
 
             # Prior Parameters of last layer
             self.K = tf.get_variable('K_init',shape=[last_layer,self.y_dim]) #\bar{K}_0
@@ -554,12 +557,13 @@ class AdaptiveDynamics(ALPaCA):
                 B[j,t,:,:] = K.T @ dphi_dxu[j,0,:,x_dim:]
                 x_pred[j,t+1,:] = x_pred[j,t,:] + np.squeeze( phi[j,:,:] @ K )
 
-        return x_pred, A, B
+        return x_pred #, A, B
     
     def reset_to_prior(self):
         self.Ln_inv = np.linalg.inv(self.L0)
         self.Qn = self.L0 @ self.K0
 
+    # TODO: need to use f_nom here, not assume f_nom = x
     def incorporate_transition(self,x,u,xp):
         # perform RLS update to Kn, Ln
         x_inp = np.reshape( np.concatenate( (x,u), axis=0 ), (1,1,-1) )
@@ -571,6 +575,7 @@ class AdaptiveDynamics(ALPaCA):
         self.Ln_inv = self.Ln_inv - 1./(1. + phiLamphi) * LninvPhi @ LninvPhi.T
         self.Qn = phi @ y.T + self.Qn
 
+    # TODO: change to assume Y is yhat + f_nom
     def incorporate_batch(self, X, Y):
         Phi = self.encode(X)
         Kn,Ln_inv = blr_update_np(self.K0,self.L0,Phi[0,:,:],Y[0,:,:])

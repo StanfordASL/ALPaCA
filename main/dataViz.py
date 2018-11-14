@@ -376,7 +376,7 @@ def sampleMN(K, L_inv, Sig):
     K_vec = np.random.multivariate_normal(mean,cov)
     return np.reshape(K_vec, K.T.shape).T
     
-def gen_pendulum_sample_fig(agent, sess, X,Y,Nu,N_samples=10,T=None, T_rollout=10,no_update=False):
+def gen_pendulum_sample_fig(agent, X,Y,Nu,N_samples=10,T=None, T_rollout=10,no_update=False):
     if not T:
         T = Y.shape[1]
         
@@ -428,7 +428,38 @@ def gen_pendulum_sample_fig(agent, sess, X,Y,Nu,N_samples=10,T=None, T_rollout=1
     plt.xlim([tt[0],tt[-1]])
     plt.ylim(ylim)
     #plt.show()
-            
+    
+    
+def gen_pendulum_rollout_fig(agent, xu, xp, Nu, N_samples=50, T=None, T_rollout=10, update=True):
+    if not T:
+        T = xp.shape[1]
+    
+    tt = np.arange(T+1)
+    
+    x_dim = xp.shape[-1]
+    x = xu[:,:,:x_dim]
+    u = xu[:,:,x_dim:]
+    
+    agent.reset_to_prior()
+    if update:
+        for t in range(Nu):
+            agent.incorporate_transition(x[0,t,:], u[0,t,:], xp[0,t,:])
+
+    Ks = agent.sample_dynamics_matrices(N_samples)
+    x_pred = agent.sample_rollout(x[0,Nu,:],u[0,Nu:Nu+T_rollout,:],Ks)
+    
+    dims = [0,1]
+    colors = ['b','r']
+    styles=['-',':']
+    for i in dims:
+        for j in range(N_samples):
+            plt.plot(tt[Nu:Nu+T_rollout+1], x_pred[j,:,i], color=colors[i], alpha=5.0/N_samples)
+        plt.plot(tt, x[0,:T+1,i], linestyle=styles[i], color='k')
+        
+    ax = plt.gca()
+    ylim = [np.min(x)-2,np.max(x)+2]
+    plt.xlim([tt[0],tt[-1]])
+    plt.ylim(ylim)        
         
 def gen_pendulum_sample_fig_gp(X,Y,Nu,N_samples=10,T=None, T_rollout=10):
     from sklearn.gaussian_process import GaussianProcessRegressor
@@ -485,42 +516,33 @@ def gen_pendulum_sample_fig_gp(X,Y,Nu,N_samples=10,T=None, T_rollout=10):
     plt.ylim(ylim)
     #plt.show()
     
-def test_adaptive_dynamics(agent, sess, X, Y, N_samples, Nu, T_rollout=30):
+def test_adaptive_dynamics(agent, xu, xp, N_samples, Nu, T_rollout=30):
     agent.reset_to_prior()
-    T = Y.shape[1]
-    x_dim = Y.shape[2]
-    u_dim = X.shape[2] - x_dim
+    T = xp.shape[1]
+    x_dim = xp.shape[2]
+    u_dim = xu.shape[2] - x_dim
     
-    tt = np.arange(T+1)
+    tt = np.arange(T)
     
-    actions = X[0,:,x_dim:]
-    xx = np.concatenate( ( X[0,0:1,:x_dim], X[0,:T,:x_dim] + Y[0,:T,:] ) )
-    x_pred = np.zeros([N_samples, T+1, x_dim])
-    x_pred[:,:Nu+1,:] = X[0:1, :Nu+1, :x_dim]
-    time_start = time.time()
-    for t in range(0,Nu):
-        x = X[0,t,:x_dim]
-        u = X[0,t,x_dim:]
-        xp = x + Y[0,t,:]
-        
-        agent.incorporate_transition(sess, x,u,xp)
+    u = xu[0,:,x_dim:]
+    x = xu[0,:,:x_dim]
+
+    for t in range(Nu):
+        agent.incorporate_transition(x[t,:], u[t,:], xp[0,t,:])
     
-#     for j in range(N_samples):
-#         x_pred[j,Nu+1:,:] = agent.sample_rollout(sess, X[0,Nu,:x_dim], actions[(Nu):,:])
-    x_pred[:,Nu+1:,:] = agent.sample_rollout(sess, x_pred[:,Nu,:], actions[(Nu):,:])
-    time_end = time.time()
-    print("Time to sim %d step rollout conditioned on %d datapoints: %f s"%(T_rollout, Nu, time_end-time_start))
+    Ks = agent.sample_dynamics_matrices(N_samples)
+    x_pred = agent.sample_rollout(x[Nu,:], u[Nu:Nu+T_rollout,:], Ks)
     
     dims = range(x_dim)
     colors = ['b','r','g']
     styles=['-',':','-.']
     N_dims = len(dims)
     for i,d in enumerate(dims):
-        plt.subplot(N_dims/2, 2, i+1)
+        plt.subplot(int( np.ceil( N_dims*1./2 )), 2, i+1)
         for j in range(N_samples):
-            plt.plot(tt[Nu:Nu+T_rollout], x_pred[j,Nu:Nu+T_rollout,d], color='C0', alpha=5.0/N_samples)
-        plt.plot(tt, xx[:,d], linestyle=':', color='k')
-        ylims = np.min(xx[:,d]) + (np.max(xx[:,d]) - np.min(xx[:,d]))*np.array([-0.08, 1.08])
+            plt.plot(range(Nu, Nu+T_rollout+1), x_pred[j,:,d], color='C0', alpha=5.0/N_samples)
+        plt.plot(tt, x[:T,d], linestyle=':', color='k')
+        ylims = np.min(x[:,d]) + (np.max(x[:,d]) - np.min(x[:,d]))*np.array([-0.08, 1.08])
         plt.ylabel(r"$x_{" + str(d+1) + r"}(k)$")
         plt.ylim(ylims)
         plt.xlim([tt[0],tt[-1]])

@@ -23,10 +23,10 @@ class GPReg:
             for j in range(UY.shape[2]):
                 gp = GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=9)
                 if ux.shape[0] > 0:
-                    gp.fit(ux,uy)
+                    gp.fit(ux,uy[:,j])
             
                 y,s = gp.predict(x, return_std=True)
-                y = np.reshape(y,[-1, UY.shape[2]])
+                #y = np.reshape(y,[-1, UY.shape[2]])
                 y_pred[i,:,j], sigma[i,:,j,j] = (y,s)
             
         return y_pred, sigma

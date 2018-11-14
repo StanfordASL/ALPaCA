@@ -5,7 +5,7 @@ y_dim: 2
 sigma_eps: 0.001
 
 data_horizon: 20
-num_class_samples: 20
+meta_batch_size: 20
 
 nn_layers: [128,128,16]
 activation: 'tanh'

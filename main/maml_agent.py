@@ -77,7 +77,7 @@ class MAMLAgent:
                     ind1 = model_file.index('model')
                     self.resume_itr = int(model_file[ind1+5:])
                     print("Restoring model weights from " + model_file)
-                    self.saver.restore(sess, model_file)
+                    self.saver.restore(self.sess, model_file)
 
     
     def train(self, dataset, metatrain_iterations):
@@ -86,9 +86,9 @@ class MAMLAgent:
         PRINT_INTERVAL = 1000
         TEST_PRINT_INTERVAL = PRINT_INTERVAL*5
         
-        pretrain_iterations = 0
+        pretrain_iterations = 10000
         update_batch_size = FLAGS.update_batch_size #config['data_horizon']
-        meta_batch_size = FLAGS.meta_batch_size #config['num_class_samples']
+        meta_batch_size = FLAGS.meta_batch_size #config['meta_batch_size']
 
         train_writer = tf.summary.FileWriter(self.logdir + '/' + self.exp_string, self.graph)
         print('Done initializing, starting training.')
@@ -142,3 +142,54 @@ class MAMLAgent:
         y, = self.sess.run([self.model.outputbs], feed_dict=feed_dict)
         
         return y[num_updates-1], None
+    
+class MAMLDynamics(MAMLAgent):
+    def __init__(self, config, sess, graph=None, exp_string="maml_test"):
+        super(MAMLDynamics, self).__init__(config, sess, graph, exp_string)
+        self.ux = []
+        self.uy = []
+        
+    def sample_rollout(self, x0, actions):
+        T, a_dim = actions.shape
+        mult_sample = False
+        if x0.ndim == 1:
+            N_samples = 1
+            x_dim = x0.shape[0]
+            
+            x0 = np.expand_dims(x0, axis=1)
+        elif x0.ndim == 2:
+            mult_sample = True
+            N_samples = x0.shape[0]
+            x_dim = x0.shape[1]
+            
+        actions = np.tile(np.expand_dims(actions,axis=0), (N_samples, 1, 1))
+            
+        x_pred = np.zeros( (N_samples, T+1, x_dim) )
+        x_pred[:,0,:] = x0
+        
+        if len(self.ux) > 0:
+            UX = np.concatenate(self.ux, axis=1)
+            UY = np.concatenate(self.uy, axis=1)
+        else:
+            UX = np.zeros([1,0,self.config['x_dim']])
+            UY = np.zeros([1,0,self.config['y_dim']])
+        for t in range(0, T):
+            x_inp = np.concatenate( (x_pred[0:1,t:t+1,:], actions[0:1,t:t+1,:]), axis=2 )
+            y, s = self.test(UX, UY, x_inp, num_updates=5)
+            x_pred[:,t+1,:] =  y + x_pred[:,t,:]
+        
+        if mult_sample:
+            return x_pred[:,1:,:]
+        else:
+            return x_pred[0,1:,:]
+        
+    def reset_to_prior(self):
+        self.ux = []
+        self.uy = []
+        
+    def incorporate_transition(self, x, u, xp):
+        x_inp = np.reshape( np.concatenate( (x,u), axis=0 ), (1,1,-1) )
+        y = np.reshape(xp - x, (1,1,-1))
+        
+        self.ux.append(x_inp)
+        self.uy.append(y)
