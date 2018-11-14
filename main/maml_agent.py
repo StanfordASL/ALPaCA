@@ -46,25 +46,27 @@ def register_flags():
 
 
 class MAMLAgent:
-    def __init__(self, config, exp_string="maml_test"):
+    def __init__(self, config, sess, graph=None, exp_string="maml_test"):
         FLAGS.norm = 'None'
         FLAGS.update_batch_size = 10
         FLAGS.datasource = 'sinusoid' # just to make sure maml sets up arch right   
         self.config = config
+        self.sess = sess
+        self.graph = graph if graph is not None else tf.get_default_graph()
         self.logdir = "summaries"
         self.exp_string = exp_string
         self.test_num_updates = 5
 
         
-    def construct_model(self, sess, graph, load_model=True):
-        with graph.as_default():
+    def construct_model(self, load_model=True):
+        with self.graph.as_default():
             self.model = MAML(self.config['x_dim'], self.config['y_dim'], self.test_num_updates)
             self.model.construct_model(input_tensors=None, prefix='metatrain_')
             self.model.summ_op = tf.summary.merge_all()
 
             self.saver = self.loader = tf.train.Saver(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES), max_to_keep=10)
 
-            tf.global_variables_initializer().run(session=sess)
+            tf.global_variables_initializer().run(session=self.sess)
 
             self.resume_itr = 0
             if load_model:
@@ -75,25 +77,25 @@ class MAMLAgent:
                     ind1 = model_file.index('model')
                     self.resume_itr = int(model_file[ind1+5:])
                     print("Restoring model weights from " + model_file)
-                    self.saver.restore(sess, model_file)
+                    self.saver.restore(self.sess, model_file)
 
     
-    def train(self, sess, DG, metatrain_iterations):
+    def train(self, dataset, metatrain_iterations):
         SUMMARY_INTERVAL = 100
         SAVE_INTERVAL = 1000
         PRINT_INTERVAL = 1000
         TEST_PRINT_INTERVAL = PRINT_INTERVAL*5
         
-        pretrain_iterations = 0
+        pretrain_iterations = 10000
         update_batch_size = FLAGS.update_batch_size #config['data_horizon']
-        meta_batch_size = FLAGS.meta_batch_size #config['num_class_samples']
+        meta_batch_size = FLAGS.meta_batch_size #config['meta_batch_size']
 
-        train_writer = tf.summary.FileWriter(self.logdir + '/' + self.exp_string, sess.graph)
+        train_writer = tf.summary.FileWriter(self.logdir + '/' + self.exp_string, self.graph)
         print('Done initializing, starting training.')
         prelosses, postlosses = [], []
         for itr in range(self.resume_itr, pretrain_iterations+metatrain_iterations):
             feed_dict = {}
-            Y,X = DG.sample_trajectories(None,update_batch_size*2,meta_batch_size,return_lists=False)
+            X,Y = dataset.sample(meta_batch_size, update_batch_size*2)
 
             inputa = X[:, :update_batch_size, :]
             labela = Y[:, :update_batch_size, :]
@@ -109,7 +111,7 @@ class MAMLAgent:
             if (itr % SUMMARY_INTERVAL == 0 or itr % PRINT_INTERVAL == 0):
                 input_tensors.extend([self.model.summ_op, self.model.total_loss1, self.model.total_losses2[FLAGS.num_updates-1]])
 
-            result = sess.run(input_tensors, feed_dict)
+            result = self.sess.run(input_tensors, feed_dict)
 
             if itr % SUMMARY_INTERVAL == 0:
                 prelosses.append(result[-2])
@@ -126,17 +128,68 @@ class MAMLAgent:
                 prelosses, postlosses = [], []
 
             if (itr!=0) and itr % SAVE_INTERVAL == 0:
-                self.saver.save(sess, self.logdir + '/' + self.exp_string + '/model' + str(itr))
+                self.saver.save(self.sess, self.logdir + '/' + self.exp_string + '/model' + str(itr))
 
-        self.saver.save(sess, self.logdir + '/' + self.exp_string +  '/model' + str(itr))
+        self.saver.save(self.sess, self.logdir + '/' + self.exp_string +  '/model' + str(itr))
     
-    def test(self, sess, ux, uy, x, num_updates=1):
+    def test(self, ux, uy, x, num_updates=1):
         feed_dict = {
             self.model.inputa: ux,
             self.model.labela: uy,
             self.model.inputb: x,
         }
         
-        y, = sess.run([self.model.outputbs], feed_dict=feed_dict)
+        y, = self.sess.run([self.model.outputbs], feed_dict=feed_dict)
         
         return y[num_updates-1], None
+    
+class MAMLDynamics(MAMLAgent):
+    def __init__(self, config, sess, graph=None, exp_string="maml_test"):
+        super(MAMLDynamics, self).__init__(config, sess, graph, exp_string)
+        self.ux = []
+        self.uy = []
+        
+    def sample_rollout(self, x0, actions):
+        T, a_dim = actions.shape
+        mult_sample = False
+        if x0.ndim == 1:
+            N_samples = 1
+            x_dim = x0.shape[0]
+            
+            x0 = np.expand_dims(x0, axis=1)
+        elif x0.ndim == 2:
+            mult_sample = True
+            N_samples = x0.shape[0]
+            x_dim = x0.shape[1]
+            
+        actions = np.tile(np.expand_dims(actions,axis=0), (N_samples, 1, 1))
+            
+        x_pred = np.zeros( (N_samples, T+1, x_dim) )
+        x_pred[:,0,:] = x0
+        
+        if len(self.ux) > 0:
+            UX = np.concatenate(self.ux, axis=1)
+            UY = np.concatenate(self.uy, axis=1)
+        else:
+            UX = np.zeros([1,0,self.config['x_dim']])
+            UY = np.zeros([1,0,self.config['y_dim']])
+        for t in range(0, T):
+            x_inp = np.concatenate( (x_pred[0:1,t:t+1,:], actions[0:1,t:t+1,:]), axis=2 )
+            y, s = self.test(UX, UY, x_inp, num_updates=5)
+            x_pred[:,t+1,:] =  y + x_pred[:,t,:]
+        
+        if mult_sample:
+            return x_pred[:,1:,:]
+        else:
+            return x_pred[0,1:,:]
+        
+    def reset_to_prior(self):
+        self.ux = []
+        self.uy = []
+        
+    def incorporate_transition(self, x, u, xp):
+        x_inp = np.reshape( np.concatenate( (x,u), axis=0 ), (1,1,-1) )
+        y = np.reshape(xp - x, (1,1,-1))
+        
+        self.ux.append(x_inp)
+        self.uy.append(y)

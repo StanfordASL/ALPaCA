@@ -4,8 +4,8 @@ x_dim: 8
 y_dim: 8
 sigma_eps: 0.001
 
-data_horizon: 33
-num_class_samples: 40
+data_horizon: 18
+meta_batch_size: 40
 
 nn_layers: [128,128,32]
 activation: 'tanh'
