@@ -3,7 +3,7 @@ import tensorflow as tf
 from maml.maml import MAML
 from maml.data_generator import DataGenerator
 from tensorflow.python.platform import flags
-from main.datagen import *
+from main.dataset import *
 from main.dataViz import *
 import yaml
 import matplotlib.pyplot as plt
