@@ -53,7 +53,7 @@ pandocfilters==1.4.2
 parso==0.3.1
 pexpect==4.6.0
 pickleshare==0.7.4
-Pillow==5.2.0
+Pillow==9.3.0
 progressbar2==3.38.0
 prompt-toolkit==1.0.15
 protobuf==3.6.0
